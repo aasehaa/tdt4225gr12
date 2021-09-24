@@ -12,6 +12,7 @@ Insert data psudeocode
         if has_labels:
             sjekk at start in labels[start] og slutt in labels[slutt]
                 hvis match: sett transportation_mode til labels[Mode]
+<<<<<<< HEAD
         sett inn plt-data i TrackPoint DB:
         with open(filnavn) as f:
             skip til linje 6
@@ -105,3 +106,9 @@ for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
                 with open(fn, 'r') as f:
                     pass
 
+=======
+        sett inn plt-data i TrackPoint DB
+        # Piazza-spørsmål: kan vi anta at data ikke er feil?   
+## Batches of data instead?      
+"""
+>>>>>>> 9e4f8e2bfb9d6a8094a758d195ff82e0c92412de
