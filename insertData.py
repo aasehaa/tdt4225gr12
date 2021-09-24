@@ -12,7 +12,6 @@ Insert data psudeocode
         if has_labels:
             sjekk at start in labels[start] og slutt in labels[slutt]
                 hvis match: sett transportation_mode til labels[Mode]
-<<<<<<< HEAD
         sett inn plt-data i TrackPoint DB:
         with open(filnavn) as f:
             skip til linje 6
@@ -58,9 +57,11 @@ class DatabaseSession:
         self.db_connection.commit()
 
     def insert_data(self, table_name, values):
-        if table_name == 'User': values = utilities.stringpad(values[0]) + values[1]
+        if table_name == 'User': values = utilities.stringpad(values[0]) + ', ' + values[1]
         elif table_name == 'Activity':
-            values[1], values[2] = "'" + values[1] + "'", "'"
+            values[1], values[2] = utilities.stringpad(values[1]), utilities.stringpad(values[2])
+            values = ','.join(values)
+        else:
             values = ','.join(values)
         query = """INSERT INTO %s VALUES (%s)""" # TODO maybe write different queries for different tables...
         try:
@@ -95,20 +96,28 @@ for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
                         activity = f.read().splitlines()[6:]
                         activity_start, activity_end = activity[0].split(',')[4], activity[-1].split(',')[4]
                         activity_start, activity_end = utilities.convert_timestamp(activity_start), utilities.convert_timestamp(activity_end)
+                        current_user = root[5:8]
 
-                        instance.insert_data('Activity', ())
-
+                        instance.insert_data('Activity', (current_user, "NULL", activity_start, activity_end))
+                        instance.cursor.execute("SELECT LAST_INSERT_ID()")
+                        activity_ID = int(instance.cursor.fetchall()[0][0])
                         for point in activity:
                             lat, long, _, alt, time, _, _ = point.split(',')
-                        time = datetime.fromtimestamp(utilities.convert_timestamp(time))
-                        # DB add this point to the entry
-            else:
+                            time_datetime = utilities.convert_timestamp(time)
+                            instance.insert_data('Trackpoint', values=
+                            (
+                                activity_ID, lat, long, alt, time, time_datetime
+                            )) #TODO make it so it inserts batches instead here!
+
+            else: # Match labels to activity for some user
                 with open(fn, 'r') as f:
                     pass
-
-=======
-        sett inn plt-data i TrackPoint DB
-        # Piazza-spørsmål: kan vi anta at data ikke er feil?   
-## Batches of data instead?      
-"""
->>>>>>> 9e4f8e2bfb9d6a8094a758d195ff82e0c92412de
+                    # Find start and end date
+                    # Lookup 
+# New pseudeocode, matching
+# When adding activities, save start and end date somewhere in Python
+# (After adding all activities and points)
+# for ID in label_IDs:
+    # for each label in txt file
+        # if label.start == activity.start AND label.end == activity.end:
+        #   change transportation mode in activity (SQL)
