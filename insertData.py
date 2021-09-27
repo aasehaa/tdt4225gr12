@@ -36,6 +36,7 @@ class DatabaseSession:
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
+        self.batchList = [] # To insert batches of data
 
     def create_table(self, table_name):
         table_schema = {
@@ -77,11 +78,28 @@ class DatabaseSession:
         except Exception as e:
             print("Unable to add values " + values + " to table " + table_name + '\n' + e)
 
+    def insert_batch(self, table_name, values, batchSize):
+        if len(self.batchList) < batchSize:
+            self.batchList.append(values)
+        else:
+            for val in self.batchList:
+                val = ','.join(val)
+                self.cursor.excecute("INSERT INTO %s VALUES (%s)" % (table_name, val))
+            self.db_connection.commit()
+        self.batchList = []
+
     def drop_table(self, table_name):
         query = "DROP TABLE %s"
         self.cursor.execute(query % table_name)
+        self.db_connection.commit()
+
     def clean_database(self):
-        pass
+        """Drops all tables in Database
+        """
+        self.cursor.execute("SHOW tables")
+        all_tables = self.cursor.fetchall()[0]
+        for table in all_tables:
+            self.drop_table(self, table)
         # Drop all tables
 
 dataset_path = os.path.dirname(__file__) + "\\..\\dataset"
@@ -94,7 +112,7 @@ instance.create_table('Activity')
 instance.create_table('TrackPoints')
 
 for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
-    potential_matches = dict() # TODO is this very large and inefficient?
+    potential_matches = dict()
     if count == 0:
         # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
         # For each of them, we cehck if they're labeled and assign the has_labels boolean accordingly.
@@ -111,13 +129,20 @@ for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
         # We implement case 1 first:
         for fn in files:
 
-            if fn[-3] == 'txt':
+            if fn[-3] == 'txt': # Case 1: Open the labels.txt file
                 with open(fn, 'r') as f:
                     all_rows = f.read().splitlines()
                     for row in all_rows[1:]:
                         start_time, end_time, mode = row.split('\t')
-                        # Convert times to DateTime form
-                        # potential_matches[root[5:8]][0].append(start_time) etc etc
+                        
+                        # Convert to DateTime:
+                        start_time = datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
+                        end_time = datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
+                        
+                        # Add to dictionary
+                        potential_matches[root[5:8]][0].append(start_time)
+                        potential_matches[root[5:8]][1].append(end_time)
+                        potential_matches[root[5:8]][2].append(mode)
 
             else:
                 with open(fn, 'r') as f: # TODO maybe we need entire directory path, unsure
@@ -127,10 +152,11 @@ for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
                         activity_start, activity_end = activity[0].split(',')[4], activity[-1].split(',')[4]
                         activity_start, activity_end = utilities.convert_timestamp(activity_start), utilities.convert_timestamp(activity_end)
                         if activity_start in potential_matches[root[5:8]][0]:
-                            pass
-                            # Get index in potential_matches
-                            # if activity_end == potential_matches[root[5:8]][1][ind]:
-                                # transp_mode = potential_matches[root[5:8]][2][ind]
+                            # This triggers when we find a match for the start time.
+                            # We also have to ensure that the corresponding end time also matches.
+                            ind = potential_matches[root[5:8]][0].index(activity_start)
+                            if activity_end == potential_matches[root[5:8]][1][ind]:
+                                transp_mode = potential_matches[root[5:8]][2][ind]
                         current_user = root[5:8] # root is on the form Data\xxx\Trajectory so we extract xxx
 
                         instance.insert_data('Activity', (current_user, transp_mode, activity_start, activity_end))
@@ -139,7 +165,8 @@ for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
                         for point in activity:
                             lat, long, _, alt, time, _, _ = point.split(',')
                             time_datetime = utilities.convert_timestamp(time)
-                            instance.insert_data('Trackpoint', values=
+                            instance.insert_batch('Trackpoint', values=
                             (
                                 activity_ID, lat, long, alt, time, time_datetime
-                            )) #TODO make it so it inserts batches instead here!
+                            ), batchSize=50)
+
