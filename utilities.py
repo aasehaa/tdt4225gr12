@@ -12,12 +12,16 @@ def convert_timestamp(excel_timestamp : float, to_datetime : bool = True) -> flo
     """
     return 86400 * (excel_timestamp - 25569) + 7200
 
-def stringpad(str : string) -> string:
+
+def stringpad(old_str):
     """Simple helper to pad a string with ', to easier insert strings in the tables.
 
     :param str: Original string
     :type str: string
     :return: Padded string
     :rtype: string
+
+    Args:
+        old_str: string
     """
-    return "'" + str + "'"
+    return "'" + old_str + "'"
