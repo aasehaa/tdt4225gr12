@@ -14,7 +14,7 @@ Insert data psudeocode
                 hvis match: sett transportation_mode til labels[Mode]
         sett inn plt-data i TrackPoint DB:
         with open(filnavn) as f:
-            skip til linje 6
+            skip til linje 6.
             
 
         # Piazza-spørsmål: kan vi anta at data ikke er feil?   
