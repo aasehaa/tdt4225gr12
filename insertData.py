@@ -42,40 +42,47 @@ class DatabaseSession:
 
     def create_table(self, table_name):
         table_schema = {
-            'User': """id STRING NOT NULL PRIMARY KEY,
-                    has_labels BOOLEAN""",
-            'Activity': """id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                        user_id STRING FOREIGN KEY REFERENCES User(id),
-                        transportation_mode STRING,
+            'User': """id VARCHAR(3) NOT NULL,
+                        has_labels BOOLEAN,
+                        PRIMARY KEY (id)""",
+            'Activity': """id INT AUTO_INCREMENT NOT NULL,
+                        user_id VARCHAR(3),
+                        transportation_mode VARCHAR(10),
                         start_date_time DATETIME,
-                        end_date_time DATETIME
+                        end_date_time DATETIME,
+                        PRIMARY KEY (id),
+                        FOREIGN KEY (user_id) REFERENCES User(id)
                         """,
-            'TrackPoint': """id INT NOT NULL PRIMARY KEY,
-                        activity_id INT FOREIGN KEY REFERENCES Activity(id),
+            'TrackPoint': """id INT NOT NULL,
+                        activity_id INT,
                         lat DOUBLE,
                         lon DOUBLE,
                         altitude INT,
                         date_days DOUBLE,
-                        date_time DATETIME"""
+                        date_time DATETIME,
+                        PRIMARY KEY (id),
+                        FOREIGN KEY (activity_id) REFERENCES Activity(id)"""
         }
         query = """CREATE TABLE IF NOT EXISTS %s ( %s )"""
         # This adds table_name to the %s variable and executes the query
-        self.cursor.execute(query % table_name % table_schema[table_name])
+        self.cursor.execute(query % (table_name, table_schema[table_name]))
         self.db_connection.commit()
 
     def insert_data(self, table_name, values):
         # Need to parse the columns in 'values` differently depending on what table we are inserting into
         if table_name == 'User':
-            values = utilities.stringpad(values[0] + ', ' + values[1])
+            query = "INSERT INTO %s VALUES ('%s', %s)" % (table_name, values[0], values[1])
+            # values = utilities.stringpad(values[0]) + ', ' + str(values[1])
         elif table_name == 'Activity':
             # Second and third column has to be padded with single quotes.
             values[1], values[2] = utilities.stringpad(values[1]), utilities.stringpad(values[2])
             values = ','.join(values)
         else:
             values = ','.join(values)
-        query = """INSERT INTO %s VALUES (%s)"""
+        # query = """INSERT INTO %s VALUES (%s)""" #Uncomment
         try:
-            self.cursor.execute(query % (table_name, values))
+            self.cursor.execute(query)
+            #self.cursor.execute(query % (table_name, values))
             self.db_connection.commit()
         except Exception as e:
             print("Unable to add values " + values + " to table " + table_name + '\n' + e)
@@ -119,7 +126,7 @@ class DatabaseSession:
             # Collect user IDs that has labeled activity
             labeled_IDs = fs.read().splitlines()
 
-        for count, root, dirs, files in enumerate(os.walk(test_dataset_path + '\\Data')):
+        for count, (root, dirs, files) in enumerate(os.walk(test_dataset_path + '\\Data')):
             potential_matches = dict()
             if count == 0:
                 # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
@@ -188,13 +195,13 @@ def main():
         print('Datasession start')
         instance.create_table('User')
         instance.create_table('Activity')
-        instance.create_table('TrackPoints')
+        instance.create_table('TrackPoint')
         print('apply data...')
         instance.apply_data(instance)
         instance.show_tables()
         instance.drop_table('User')
         instance.drop_table('Activity')
-        instance.drop_table('TrackPoints')
+        instance.drop_table('TrackPoint')
         instance.show_tables()
     except Exception as e:
         print("ERROR: Failed to use database:", e)
