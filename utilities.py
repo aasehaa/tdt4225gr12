@@ -10,18 +10,4 @@ def convert_timestamp(excel_timestamp : float, to_datetime : bool = True) -> flo
     :return: Datetime object, or time in seconds since January 1st 1970
     :rtype: float
     """
-    return 86400 * (excel_timestamp - 25569) + 7200
-
-
-def stringpad(old_str):
-    """Simple helper to pad a string with ', to easier insert strings in the tables.
-
-    :param str: Original string
-    :type str: string
-    :return: Padded string
-    :rtype: string
-
-    Args:
-        old_str: string
-    """
-    return "'" + old_str + "'"
+    return 86400 * (float(excel_timestamp) - 25569) + 7200
