@@ -1,31 +1,11 @@
-""" 
-Insert data psudeocode
-* Bruk os.walk
-* For hver user:
-    if user_dirname in labeled_ids.txt: has_labels = True
-    sett inn bruker i DB
-    for hver .plt
-        activityID = mysql_connector.GetAutoIncrementThing()
-        if antall lines > 2506: skip (husk å anta 2506 i rapporten)
-        hent start [6] og slutt [-1] datetime
-        Sett inn aktivitet i DB (med transportation_mode = '')
-        if has_labels:
-            sjekk at start in labels[start] og slutt in labels[slutt]
-                hvis match: sett transportation_mode til labels[Mode]
-        sett inn plt-data i TrackPoint DB:
-        with open(filnavn) as f:
-            skip til linje 6.
-            
-
-        # Piazza-spørsmål: kan vi anta at data ikke er feil?   
-## Batches of data instead?      
-"""
 import os
 # import pandas as pd
 from datetime import datetime
 import utilities
 from DbConnector import DbConnector
 from tabulate import tabulate
+from typing import Tuple
+
 
 try:
     from tqdm import tqdm
@@ -35,13 +15,19 @@ except:
 
 class DatabaseSession:
     def __init__(self) -> None:
+        """Class constructor
+        """
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
         self.batchList = []  # To insert batches of data
         self.potential_matches = dict()
 
-    def create_table(self, table_name):
+    def create_table(self, table_name: str) -> None:
+        """Creates tables with appropriate schema given that the table name doesn't aldready exist
+        :param table_name: 
+        :type table_name: str
+        """
         table_schema = {
             'User': """id VARCHAR(3) NOT NULL,
                         has_labels BOOLEAN,
@@ -54,7 +40,7 @@ class DatabaseSession:
                         PRIMARY KEY (id),
                         FOREIGN KEY (user_id) REFERENCES User(id)
                         """,
-            'TrackPoint': """id INT NOT NULL,
+            'TrackPoint': """id INT AUTO_INCREMENT NOT NULL,
                         activity_id INT,
                         lat DOUBLE,
                         lon DOUBLE,
@@ -69,23 +55,38 @@ class DatabaseSession:
         self.cursor.execute(query % (table_name, table_schema[table_name]))
         self.db_connection.commit()
 
-    def insert_data(self, table_name, values):
+    def insert_data(self, table_name: str, values: Tuple) -> None:
+        """Method for inserting a single row/query to a given table
+
+        :param table_name: Name of table in Database
+        :type table_name: str
+        :param values: Tuple of all values to be inserted  
+        :type values: Tuple of varying size and data types
+        """
         # Need to parse the columns in 'values` differently depending on what table we are inserting into
         if table_name == 'User':
             query = "INSERT INTO %s VALUES ('%s', %s)"
         elif table_name == 'Activity':
-            query = "INSERT INTO %s (user_id, transportation_mode, start_date_time, end_date_time) VALUES ('%s', %s, %s, %s)"
+            query = "INSERT INTO %s (user_id, transportation_mode, start_date_time, end_date_time) VALUES ('%s', %s, '%s', '%s')"
 
         else:
-            query = "INSERT INTO %s VALUES (%s, %s, %s, %s, %s, %s)"
+            query = "INSERT INTO %s (activity_id, lat, lon, altitude, date_days, date_time) VALUES (%s, %s, %s, %s, '%s', '%s')"
         try:
             self.cursor.execute(query % (table_name, *values))
-            #self.cursor.execute(query % (table_name, values))
             self.db_connection.commit()
         except Exception as e:
             print("Unable to add values to table:", e)
 
-    def insert_batch(self, table_name, values, batchSize):
+    def insert_batch(self, table_name: str, values: Tuple, batchSize: int) -> None:
+        """Specific method for adding batches of insertions simultaneously, only implemented for TrackPoint table
+
+        :param table_name: Name of table (TrackPoint)
+        :type table_name: str
+        :param values: Values to be inserted
+        :type values: Tuple
+        :param batchSize: Number of additions to query at the same time
+        :type batchSize: int
+        """
         if len(self.batchList) < batchSize:
             self.batchList.append(values)
         else:
@@ -114,10 +115,15 @@ class DatabaseSession:
         print(tabulate(rows, headers=self.cursor.column_names))
 
     def apply_data(self, instance):
+        """Main method scraping and fitting data from dataset, and inserting into the database
+
+        :param instance: Instance-class containing database connection info
+        :type instance: class
+        """
         dataset_path = os.path.dirname(__file__) + "\\..\\dataset"
 
         # Test
-        test_dataset_path = os.path.dirname(__file__) + "\\..\\testDataset"
+        test_dataset_path = os.path.dirname(__file__) + "\\..\\testDataset2"
 
         with open(test_dataset_path + '\\labeled_ids.txt', 'r') as fs:
             # Collect user IDs that has labeled activity
@@ -130,6 +136,7 @@ class DatabaseSession:
                 for id in dirs:
                     has_labels = id in labeled_IDs
                     instance.insert_data('User', (id, has_labels))
+                    # Create a 2D list for each ID in a dictionary made for matching activities with their labels
                     self.potential_matches[id] = [[], [], []]
 
             if files != []:
@@ -146,15 +153,17 @@ class DatabaseSession:
                                 start_time, end_time, mode = row.split('\t')
 
                                 # Convert to DateTime:
-                                start_time = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
-                                end_time = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+                                start_time = start_time.replace("/", "-")
+                                end_time = end_time.replace("/", "-")
+                                # datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
+                                # end_time = datetime.strptime(end_time, '%Y/%m/%d %H:%M:%S')
 
                                 # Add to dictionary
                                 self.potential_matches[root[-3:]][0].append(start_time)
                                 self.potential_matches[root[-3:]][1].append(end_time)
                                 self.potential_matches[root[-3:]][2].append(mode)
 
-                    else:
+                    elif fn[-3:] == 'plt':
                         with open(root + '\\' + fn, 'r') as f: 
                             activity = f.read().splitlines()[6:]
                             if len(activity) <= 2500:
@@ -174,8 +183,9 @@ class DatabaseSession:
 
                                 instance.insert_data('Activity',
                                                      (current_user, transp_mode, activity_start, activity_end))
-                                instance.cursor.execute("SELECT LAST_INSERT_ID()")
-                                activity_ID = str(instance.cursor.fetchall()[0][0])
+                                # instance.cursor.execute("SELECT LAST_INSERT_ID()")
+                                # activity_ID = str(instance.cursor.fetchall()[0][0])
+                                activity_ID = instance.cursor.lastrowid
                                 for point in activity:
                                     lat, long, _, alt, timestamp, date, time = point.split(',')
                                     time_datetime = date + " " + time
@@ -201,7 +211,7 @@ def main():
     print('apply data...')
     try:
         instance.apply_data(instance)
-        instance.show_tables()
+        # instance.show_tables()
         # instance.drop_table('TrackPoint')
         # instance.drop_table('Activity')
         # instance.drop_table('User')
