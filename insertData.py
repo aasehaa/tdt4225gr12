@@ -90,8 +90,7 @@ class DatabaseSession:
             self.batchList.append(values)
         else:
             for val in self.batchList:
-                val = ','.join(val)
-                self.cursor.excecute("INSERT INTO %s VALUES (%s)" % (table_name, val))
+                self.cursor.excecute("INSERT INTO %s VALUES (%s)" % (table_name, *val))
             self.db_connection.commit()
         self.batchList = []
 
@@ -147,8 +146,8 @@ class DatabaseSession:
                                 start_time, end_time, mode = row.split('\t')
 
                                 # Convert to DateTime:
-                                start_time = datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
-                                end_time = datetime.strptime(end_time, '%Y/%m/%d %H:%M:%S')
+                                start_time = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+                                end_time = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
 
                                 # Add to dictionary
                                 self.potential_matches[root[-3:]][0].append(start_time)
@@ -156,15 +155,13 @@ class DatabaseSession:
                                 self.potential_matches[root[-3:]][2].append(mode)
 
                     else:
-                        with open(root + '\\' + fn, 'r') as f:  # TODO maybe we need entire directory path, unsure
+                        with open(root + '\\' + fn, 'r') as f: 
                             activity = f.read().splitlines()[6:]
                             if len(activity) <= 2500:
-                            # if sum(1 for line in f) <= 2506:  # Skip all files with more than 2506 lines.
                                 transp_mode = "NULL"
-                                # activity = f.read().splitlines()[6:]
-                                activity_start, activity_end = activity[0].split(',')[4], activity[-1].split(',')[4]
-                                activity_start, activity_end = utilities.convert_timestamp(
-                                    activity_start), utilities.convert_timestamp(activity_end)
+                                # Save time as YYYY-MM-DD HH:MM:SS strings
+                                activity_start = activity[0].split(',')[5] + ' ' + activity[0].split(',')[6]
+                                activity_end = activity[-1].split(',')[5] + ' ' + activity[-1].split(',')[6]
                                 
                                 user = root[-14:-11]
                                 if activity_start in self.potential_matches[root[-14:-11]][0]:
@@ -178,14 +175,16 @@ class DatabaseSession:
                                 instance.insert_data('Activity',
                                                      (current_user, transp_mode, activity_start, activity_end))
                                 instance.cursor.execute("SELECT LAST_INSERT_ID()")
-                                activity_ID = int(instance.cursor.fetchall()[0][0])
+                                activity_ID = str(instance.cursor.fetchall()[0][0])
                                 for point in activity:
-                                    lat, long, _, alt, time, _, _ = point.split(',')
-                                    time_datetime = utilities.convert_timestamp(time)
-                                    instance.insert_batch('TrackPoint', values=
-                                    (
-                                        activity_ID, lat, long, alt, time, time_datetime
-                                    ), batchSize=50)
+                                    lat, long, _, alt, timestamp, date, time = point.split(',')
+                                    time_datetime = date + " " + time
+                                    instance.insert_data('TrackPoint', values=
+                                    (activity_ID, lat, long, alt, timestamp, time_datetime))
+                                    # instance.insert_batch('TrackPoint', values=
+                                    # (
+                                    #     activity_ID, lat, long, alt, timestamp, time_datetime
+                                    # ), batchSize=50)
 
 
 def main():
