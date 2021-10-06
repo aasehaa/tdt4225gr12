@@ -1,16 +1,15 @@
 import os
 # import pandas as pd
 from datetime import datetime
-import utilities
 from DbConnector import DbConnector
 from tabulate import tabulate
 from typing import Tuple
 
-
 try:
     from tqdm import tqdm
 except:
-    pass  # noqa
+    def tqdm(*args):
+        return args
 
 
 class DatabaseSession:
@@ -93,7 +92,7 @@ class DatabaseSession:
             for val in self.batchList:
                 self.cursor.excecute("INSERT INTO %s VALUES (%s)" % (table_name, *val))
             self.db_connection.commit()
-        self.batchList = []
+            self.batchList = [] # Resets temp storage of queries to be excecuted
 
     def drop_table(self, table_name):
         query = "DROP TABLE %s"
@@ -107,7 +106,6 @@ class DatabaseSession:
         all_tables = self.cursor.fetchall()[0]
         for table in all_tables:
             self.drop_table(self, table)
-        # Drop all tables
 
     def show_tables(self):
         self.cursor.execute("SHOW TABLES")
@@ -122,7 +120,7 @@ class DatabaseSession:
         """
         dataset_path = os.path.dirname(__file__) + "\\..\\dataset"
 
-        # Test
+        # Alternative, smaller data set for testing purposes
         test_dataset_path = os.path.dirname(__file__) + "\\..\\testDataset2"
 
         with open(test_dataset_path + '\\labeled_ids.txt', 'r') as fs:
@@ -197,10 +195,16 @@ class DatabaseSession:
                                     # ), batchSize=50)
 
 
-def main():
-    print('main start')
+def main(drop_data: bool = False) -> None:
+    """Main method for excecuting part 1 and part 2
+
+    :param drop_data: Flag to determine if the generated tables should be dropped before ending program, defaults to False
+    :type drop_data: bool, optional
+    """
+    print('Geolife data insertion')
     instance = None
     try:
+        # Create instance and respective tables
         instance = DatabaseSession()
         print('Datasession start')
         instance.create_table('User')
@@ -208,18 +212,17 @@ def main():
         instance.create_table('TrackPoint')
     except Exception as e:
         print("Unable to create database:", e)
-    print('apply data...')
+    print('Applying data...')
     try:
+        # Applying data is the core function of this file as is excecuted here
         instance.apply_data(instance)
-        # instance.show_tables()
-        # instance.drop_table('TrackPoint')
-        # instance.drop_table('Activity')
-        # instance.drop_table('User')
-        
-        instance.show_tables()
-    # except Exception as e:
-        # print("ERROR: Failed to use database:", e)
+        if drop_data:
+            instance.drop_table('TrackPoint')
+            instance.drop_table('Activity')
+            instance.drop_table('User')
+
     finally:
+        # Ensure connection is closed properly regardless of exceptions
         if instance:
             instance.connection.close_connection()
 
