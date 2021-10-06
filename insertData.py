@@ -8,6 +8,9 @@ from typing import Tuple
 try:
     from tqdm import tqdm
 except:
+    # TQDM is a progress bar that has to be pip-intalled.
+    # It's used outside the entire os.walk-function
+    # If user gets module error, we redefine the function to be indentity so tqm(os.walk(...)) can still run
     def tqdm(*args):
         return args
 
@@ -127,7 +130,7 @@ class DatabaseSession:
             # Collect user IDs that has labeled activity
             labeled_IDs = fs.read().splitlines()
 
-        for count, (root, dirs, files) in enumerate(os.walk(test_dataset_path + '\\Data')):
+        for count, (root, dirs, files) in tqdm(enumerate(os.walk(test_dataset_path + '\\Data'))):
             if count == 0:
                 # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
                 # For each of them, we cehck if they're labeled and assign the has_labels boolean accordingly.
