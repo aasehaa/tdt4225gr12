@@ -2,6 +2,7 @@ import os
 # import pandas as pd
 from datetime import datetime
 import utilities
+import sql
 from DbConnector import DbConnector
 from tabulate import tabulate
 from typing import Tuple
@@ -114,6 +115,9 @@ class DatabaseSession:
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=self.cursor.column_names))
 
+    def check_sql(self):
+        sql.get_long_activity(self)
+
     def apply_data(self, instance):
         """Main method scraping and fitting data from dataset, and inserting into the database
 
@@ -203,20 +207,22 @@ def main():
     try:
         instance = DatabaseSession()
         print('Datasession start')
-        instance.create_table('User')
-        instance.create_table('Activity')
-        instance.create_table('TrackPoint')
+        # instance.create_table('User')
+        # instance.create_table('Activity')
+        # instance.create_table('TrackPoint')
     except Exception as e:
         print("Unable to create database:", e)
-    print('apply data...')
+    # print('apply data...')
     try:
-        instance.apply_data(instance)
+        # instance.apply_data(instance)
         # instance.show_tables()
         # instance.drop_table('TrackPoint')
         # instance.drop_table('Activity')
         # instance.drop_table('User')
         
-        instance.show_tables()
+        # instance.show_tables()
+
+        instance.check_sql()
     # except Exception as e:
         # print("ERROR: Failed to use database:", e)
     finally:
