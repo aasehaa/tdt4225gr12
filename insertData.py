@@ -1,15 +1,20 @@
 import os
+# import pandas as pd
+from datetime import datetime
 from models import TrackPointObj
 import sql
 from DbConnector import DbConnector
 from tabulate import tabulate
 from typing import Tuple
 
-
 try:
     from tqdm import tqdm
 except:
-    pass  # noqa
+    # TQDM is a progress bar that has to be pip-intalled.
+    # It's used outside the entire os.walk-function
+    # If user gets module error, we redefine the function to be indentity so tqm(os.walk(...)) can still run
+    def tqdm(*args):
+        return args
 
 
 class DatabaseSession:
@@ -89,7 +94,7 @@ class DatabaseSession:
             for val in self.batchList:
                 self.cursor.excecute("INSERT INTO %s VALUES (%s, %s, %s, %s,'%s','%s')" % (table_name, *val))
             self.db_connection.commit()
-        self.batchList = []
+            self.batchList = [] # Resets temp storage of queries to be excecuted
 
     def drop_table(self, table_name):
         query = "DROP TABLE %s"
@@ -103,7 +108,6 @@ class DatabaseSession:
         all_tables = self.cursor.fetchall()[0]
         for table in all_tables:
             self.drop_table(self, table)
-        # Drop all tables
 
     def show_tables(self):
         self.cursor.execute("SHOW TABLES")
@@ -120,13 +124,14 @@ class DatabaseSession:
         :param instance: Instance-class containing database connection info
         :type instance: class
         """
-        dataset_path = os.path.dirname(__file__) + "/../dataset"
+
+        dataset_path = os.path.dirname(__file__) + "\\..\\dataset"
 
         with open(dataset_path + '/labeled_ids.txt', 'r') as fs:
             # Collect user IDs that has labeled activity
             labeled_IDs = fs.read().splitlines()
 
-        for count, (root, dirs, files) in enumerate(os.walk(dataset_path + '/Data')):
+        for count, (root, dirs, files) in tqdm(enumerate(os.walk(dataset_path + '\\Data'))):
             if count == 0:
                 # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
                 # For each of them, we check if they're labeled and assign the has_labels boolean accordingly.
@@ -214,15 +219,21 @@ def drop_tables(self):
 
 
 def main():
-    print('main start')
+    """Main method for excecuting part 1 and part 2
+
+    :param drop_data: Flag to determine if the generated tables should be dropped before ending program, defaults to False
+    :type drop_data: bool, optional
+    """
+    print('Geolife data insertion')
     instance = None
     try:
+        # Create instance and respective tables
         instance = DatabaseSession()
         print('Datasession start')
 
     except Exception as e:
         print("Unable to create database:", e)
-    print('apply data...')
+    print('Applying data...')
     try:
         #instance.apply_data(instance)
         #instance.show_tables()
@@ -231,6 +242,7 @@ def main():
     except Exception as e:
         print("ERROR: Failed to use database:", e)
     finally:
+        # Ensure connection is closed properly regardless of exceptions
         if instance:
             instance.connection.close_connection()
 
