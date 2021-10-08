@@ -204,62 +204,68 @@ def main():
             print(value, sep="\t")
     except Exception as e:
         print("Unable to run query 1\n", e, sep="")
-    # try:
-    #     two = instance.query_two()
-    #     print("Query 2")
-    #     for value in two:
-    #         print(value, sep="\t")
-    # except Exception as e:
-    #     print("Unable to run query 2\n", e, sep="")
-    # try:
-    #     high = instance.query_three()
-    #     print("Query 3")
-    #     for value in high:
-    #         print(value, sep="\t")
-    # except Exception as e:
-    #     print("Unable to run query 3\n", e, sep="")
-    # try:
-    #     multiple = instance.query_five()
-    #     print("Query 5")
-    #     for value in multiple:
-    #         print(value, sep="\t")
-    # except Exception as e:
-    #     print("Unable to run query 5\n", e, sep="")
-    # try:
-    #     close_contacts = instance.query_six()
-    #     print("Query 6:\nID\tNærkontakter")
-    #     for key, value in close_contacts.items():
-    #         print(key, value, sep="\t")
-    # except Exception as e:
-    #     print("Unable to run query 6\n", e, sep="")
-    # try:
-    #     no_taxi = instance.query_seven()
-    #     print("Query 7")
-    #     for value in no_taxi:
-    #         print(value, sep="\t")
-    # except Exception as e:
-    #     print("Unable to run query 7\n", e, sep="")
-    # try:
-    #     t_mode = instance.query_eight()
-    #     print("Query 8")
-    #     for value in t_mode:
-    #         print(value, sep="\t")
-    # except Exception as e:
-    #     print("Unable to run query 8\n", e, sep="")
-    # try:
-    #     walked = instance.query_ten()
-    #     print("Query 10")
-    #     print(walked)
-    # except Exception as e:
-    #     print("Unable to run query 10\n", e, sep="")
-    # try:
-    #     full_invalid = instance.query_twelve()
-    #     print("Query12:\nUserID\t#Invalid activities")
-    #     for key, value in full_invalid.items():
-    #         if value != 0:
-    #             print(key, value, sep='\t')
-    # except:
-    #     print("Unable to run query 12")
+    try:
+        two = instance.query_two()
+        print("Query 2")
+        for value in two:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 2\n", e, sep="")
+    try:
+        high = instance.query_three()
+        print("Query 3")
+        for value in high:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 3\n", e, sep="")
+    try:
+        multiple = instance.query_five()
+        print("Query 5")
+        for value in multiple:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 5\n", e, sep="")
+    try:
+        close_contacts = instance.query_six()
+        print("Query 6:\nID\tNærkontakter")
+        for key, value in close_contacts.items():
+            print(key, value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 6\n", e, sep="")
+    try:
+        no_taxi = instance.query_seven()
+        print("Query 7")
+        for value in no_taxi:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 7\n", e, sep="")
+    try:
+        t_mode = instance.query_eight()
+        print("Query 8")
+        for value in t_mode:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 8\n", e, sep="")
+    try:
+        walked = instance.query_ten()
+        print("Query 10")
+        print(walked)
+    except Exception as e:
+        print("Unable to run query 10\n", e, sep="")
+    try:
+        alt = instance.query_eleven()
+        print("Query 11")
+        print(alt)
+    except Exception as e:
+        print("Unable to run query 11\n", e, sep="")
+    try:
+        full_invalid = instance.query_twelve()
+        print("Query12:\nUserID\t#Invalid activities")
+        for key, value in full_invalid.items():
+            if value != 0:
+                print(key, value, sep='\t')
+    except:
+        print("Unable to run query 12")
     finally:
         # Ensure connection is closed properly regardless of exceptions
         if instance:
