@@ -1,4 +1,3 @@
-# Query 6
 from haversine import haversine, Unit
 from DbConnector import DbConnector
 
@@ -14,6 +13,62 @@ class DBQuerySession:
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.db_connection.cursor(dictionary=True)
+
+    def query_one(self):
+        query1 = "SELECT COUNT(*) as 'number_of_users' FROM User;"
+        query2 = "SELECT COUNT(*) as 'number_of_activities' FROM Activity;"
+        query3 = "SELECT COUNT(*) as 'number_of_trackpoints' FROM TrackPoint;"
+
+        self.cursor.execute(query1)  
+        rows1 = self.cursor.fetchall()
+
+        self.cursor.execute(query2) 
+        rows2 = self.cursor.fetchall()
+
+        self.cursor.execute(query3) 
+        rows3 = self.cursor.fetchall()
+
+        return rows1, rows2, rows3
+
+    def query_two(self):
+        query1 = """SELECT AVG(avg_activity) FROM 
+        (SELECT COUNT(*) as avg_activity FROM Activity GROUP BY user_id) AS sub;"""
+        query2 = """SELECT MIN(min_activity)  FROM 
+        (SELECT COUNT(*) as min_activity FROM Activity GROUP BY user_id) AS sub;"""
+        query3 = """SELECT MAX(max_activity) FROM 
+        (SELECT COUNT(*) as max_activity FROM Activity GROUP BY user_id) AS sub;"""
+
+        self.cursor.execute(query1)  
+        rows1 = self.cursor.fetchall()
+
+        self.cursor.execute(query2) 
+        rows2 = self.cursor.fetchall()
+
+        self.cursor.execute(query3) 
+        rows3 = self.cursor.fetchall()
+
+        return rows1, rows2, rows3
+
+    def query_three(self):
+        query = """SELECT COUNT(*) as 'activity_count', user_id
+        FROM Activity GROUP BY user_id ORDER BY activity_count DESC LIMIT 10;"""
+
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+
+        return rows
+
+    def query_five(self):
+        query = """SELECT transportation_mode, COUNT(transportation_mode), 
+        start_date_time, COUNT(start_date_time), end_date_time, COUNT(end_date_time) 
+        FROM Activity
+        GROUP BY transportation_mode, start_date_time, end_date_time
+        HAVING COUNT(transportation_mode) > 1 AND COUNT(start_date_time) > 1 AND COUNT(end_date_time) > 1;"""
+
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+
+        return rows
     
     def query_six(self):
         query = """
@@ -48,31 +103,40 @@ class DBQuerySession:
                                 contacts[TP_B['id']].append(TP_A['id'])
         return contacts
 
-    def query_twelve(self):
-        FIVE_MINUTES_DAYS = 5*60/86_400
+    def query_seven(self):
+        query = """SELECT User.id, SUM(transportation_mode='taxi') AS numTaxi 
+        FROM User JOIN Activity ON User.id = Activity.user_id
+        GROUP BY User.id
+        HAVING numTaxi < 1 or numTaxi IS NULL;"""
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+        return rows
 
-        invalid_dict = dict()
-        for i in range(1,182):
-            invalid_dict[str(i).zfill(3)] = [None, 0] # (curr_activity,  num)
-        print
-        for id in invalid_dict.keys():
-            query = """
-            SELECT User.id, date_days, activity_id
-            FROM TrackPoint
-                JOIN Activity ON activity_id = Activity.id
-                JOIN User on user_id = User.id
-            WHERE User.id = '%s'"""
-            self.cursor.execute(query % id)
-            TP = self.cursor.fetchall()
+    def query_eight(self):
+        query = """SELECT COUNT(DISTINCT user_id), transportation_mode 
+        FROM Activity 
+        WHERE transportation_mode IS NOT NULL 
+        GROUP BY transportation_mode;"""
 
-            for i in range(1, len(TP)):  
-                if TP[i-1]['activity_id'] == TP[i]['activity_id']: # Don't want to compare TPs from 2 different activities
-                    if abs(TP[i-1]['date_days'] - TP[i]['date_days']) > FIVE_MINUTES_DAYS:
-                        curr_activity = TP[i]['activity_id']
-                        if invalid_dict[id][0] != curr_activity:
-                            invalid_dict[id][0] = curr_activity #Ensures only one increment per activity
-                            invalid_dict[id][1] += 1
-        return invalid_dict
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+
+        return rows
+
+    def query_ten(self):
+        query = "SELECT lat, lon, start_date_time, end_date_time FROM TrackPoint JOIN Activity ON TrackPoint.activity_id = Activity.id WHERE Activity.user_id = '112' AND Activity.transportation_mode = 'walk';"
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+
+        for row in rows:
+            if row[2].year != 2008 and row[3].year != 2008:
+                rows.remove(row)
+        
+        total_distance = 0
+        for x in range(0, len(rows)-1):
+            total_distance += haversine((rows[x][0], rows[x][1]),(rows[x+1][0], rows[x+1][1]))
+
+        return total_distance
     
     def query_eleven(self):
         ONE_METER_FEET = 0.3048 # 1 foot ~0.3 feet
@@ -104,6 +168,29 @@ class DBQuerySession:
         
         return alt_gained
 
+    def query_twelve(self):
+        invalid_dict = dict()
+        for i in range(1,182):
+            invalid_dict[str(i).zfill(3)] = [None, 0] # (curr_activity,  num)
+        
+        for id in tqdm(invalid_dict.keys()):
+            query = """
+            SELECT User.id, date_days, activity_id
+            FROM TrackPoint
+                JOIN Activity ON activity_id = Activity.id
+                JOIN User on user_id = User.id
+            WHERE User.id = '%s'"""
+            self.cursor.execute(query % id)
+            TP = self.cursor.fetchall()
+
+            for i in range(1, len(TP)):  
+                if TP[i-1]['activity_id'] == TP[i]['activity_id']: # Don't want to compare TPs from 2 different activities
+                    if abs(TP[i-1]['date_days'] - TP[i]['date_days']) > FIVE_MINUTES_DAYS:
+                        curr_activity = TP[i]['activity_id']
+                        if invalid_dict[id][0] != curr_activity:
+                            invalid_dict[id][0] = curr_activity #Ensures only one increment per activity
+                            invalid_dict[id][1] += 1
+        return invalid_dict
 
 
 
@@ -134,9 +221,74 @@ def main():
     #     print("Unable to run query 12", e)
     
     try:
-        res = instance.query_eleven()
+        count = instance.query_one()
+        print("Query 1")
+        for value in count:
+            print(value, sep="\t")
     except Exception as e:
-        print("Unable to run query 11:\n", e, sep="")
+        print("Unable to run query 1\n", e, sep="")
+    try:
+        two = instance.query_two()
+        print("Query 2")
+        for value in two:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 2\n", e, sep="")
+    try:
+        high = instance.query_three()
+        print("Query 3")
+        for value in high:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 3\n", e, sep="")
+    try:
+        multiple = instance.query_five()
+        print("Query 5")
+        for value in multiple:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 5\n", e, sep="")
+    try:
+        close_contacts = instance.query_six()
+        print("Query 6:\nID\tNærkontakter")
+        for key, value in close_contacts.items():
+            print(key, value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 6\n", e, sep="")
+    try:
+        no_taxi = instance.query_seven()
+        print("Query 7")
+        for value in no_taxi:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 7\n", e, sep="")
+    try:
+        t_mode = instance.query_eight()
+        print("Query 8")
+        for value in t_mode:
+            print(value, sep="\t")
+    except Exception as e:
+        print("Unable to run query 8\n", e, sep="")
+    try:
+        walked = instance.query_ten()
+        print("Query 10")
+        print(walked)
+    except Exception as e:
+        print("Unable to run query 10\n", e, sep="")
+    try:
+        alt = instance.query_eleven()
+        print("Query 11")
+        print(alt)
+    except Exception as e:
+        print("Unable to run query 11\n", e, sep="")
+    try:
+        full_invalid = instance.query_twelve()
+        print("Query12:\nUserID\t#Invalid activities")
+        for key, value in full_invalid.items():
+            if value != 0:
+                print(key, value, sep='\t')
+    except:
+        print("Unable to run query 12")
     finally:
         # Ensure connection is closed properly regardless of exceptions
         if instance:
