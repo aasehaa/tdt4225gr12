@@ -2,6 +2,7 @@ import os
 # import pandas as pd
 from datetime import datetime
 import utilities
+from models import TrackPointObj
 import sql
 from DbConnector import DbConnector
 from tabulate import tabulate
@@ -70,8 +71,8 @@ class DatabaseSession:
         elif table_name == 'Activity':
             query = "INSERT INTO %s (user_id, transportation_mode, start_date_time, end_date_time) VALUES ('%s', %s, '%s', '%s')"
 
-        else:
-            query = "INSERT INTO %s (activity_id, lat, lon, altitude, date_days, date_time) VALUES (%s, %s, %s, %s, '%s', '%s')"
+        #else:
+            #query = "INSERT INTO %s (activity_id, lat, lon, altitude, date_days, date_time) VALUES (%s, %s, %s, %s, '%s', '%s')"
         try:
             self.cursor.execute(query % (table_name, *values))
             self.db_connection.commit()
@@ -92,7 +93,7 @@ class DatabaseSession:
             self.batchList.append(values)
         else:
             for val in self.batchList:
-                self.cursor.excecute("INSERT INTO %s VALUES (%s)" % (table_name, *val))
+                self.cursor.excecute("INSERT INTO %s VALUES (%s, %s, %s, %s,'%s','%s')" % (table_name, *val))
             self.db_connection.commit()
         self.batchList = []
 
@@ -116,7 +117,7 @@ class DatabaseSession:
         print(tabulate(rows, headers=self.cursor.column_names))
 
     def check_sql(self):
-        sql.get_long_activity(self)
+        sql.year_and_month_with_most_activities(self)
 
     def apply_data(self, instance):
         """Main method scraping and fitting data from dataset, and inserting into the database
@@ -124,16 +125,16 @@ class DatabaseSession:
         :param instance: Instance-class containing database connection info
         :type instance: class
         """
-        dataset_path = os.path.dirname(__file__) + "\\..\\dataset"
+        dataset_path = os.path.dirname(__file__) + "/../dataset"
 
         # Test
-        test_dataset_path = os.path.dirname(__file__) + "\\..\\testDataset2"
+        test_dataset_path = os.path.dirname(__file__) + "/../testDataset2"
 
-        with open(test_dataset_path + '\\labeled_ids.txt', 'r') as fs:
+        with open(dataset_path + '/labeled_ids.txt', 'r') as fs:
             # Collect user IDs that has labeled activity
             labeled_IDs = fs.read().splitlines()
 
-        for count, (root, dirs, files) in enumerate(os.walk(test_dataset_path + '\\Data')):
+        for count, (root, dirs, files) in enumerate(os.walk(dataset_path + '/Data')):
             if count == 0:
                 # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
                 # For each of them, we cehck if they're labeled and assign the has_labels boolean accordingly.
@@ -151,7 +152,7 @@ class DatabaseSession:
                 for fn in files:
 
                     if fn[-3:] == 'txt':  # Case 1: Open the labels.txt file
-                        with open(root + '\\' + fn, 'r') as f:
+                        with open(root + '/' + fn, 'r') as f:
                             all_rows = f.read().splitlines()
                             for row in all_rows[1:]:
                                 start_time, end_time, mode = row.split('\t')
@@ -168,7 +169,7 @@ class DatabaseSession:
                                 self.potential_matches[root[-3:]][2].append(mode)
 
                     elif fn[-3:] == 'plt':
-                        with open(root + '\\' + fn, 'r') as f: 
+                        with open(root + '/' + fn, 'r') as f:
                             activity = f.read().splitlines()[6:]
                             if len(activity) <= 2500:
                                 transp_mode = "NULL"
@@ -190,15 +191,35 @@ class DatabaseSession:
                                 # instance.cursor.execute("SELECT LAST_INSERT_ID()")
                                 # activity_ID = str(instance.cursor.fetchall()[0][0])
                                 activity_ID = instance.cursor.lastrowid
+
+                                track_points = []
                                 for point in activity:
                                     lat, long, _, alt, timestamp, date, time = point.split(',')
                                     time_datetime = date + " " + time
-                                    instance.insert_data('TrackPoint', values=
-                                    (activity_ID, lat, long, alt, timestamp, time_datetime))
-                                    # instance.insert_batch('TrackPoint', values=
-                                    # (
-                                    #     activity_ID, lat, long, alt, timestamp, time_datetime
-                                    # ), batchSize=50)
+                                    track_point = TrackPointObj.TrackPoint(activity_ID, lat, long, alt, timestamp, time_datetime)
+
+                                    track_points.append(track_point)
+                                    #instance.insert_data('TrackPoint', values=(activity_ID, lat, long, alt, timestamp, time_datetime))
+                                    #instance.insert_batch('TrackPoint', values=
+                                    #(activity_ID, lat, long, alt, timestamp, time_datetime), batchSize=50)
+
+                                values_string = ",".join(list(map(lambda tp: "(" + ",".join([str(tp.activity_id),
+                                            str(tp.lat), str(tp.long), str(tp.altitude), str(tp.date_days), "'" +
+                                                        str(tp.date_time) + "'", ]) + ")", track_points)))
+                                query = """INSERT INTO TrackPoint(activity_id, lat, lon, altitude, date_days, date_time) 
+                                            VALUES %s;""" % values_string
+
+                                self.cursor.execute(query)
+                                self.db_connection.commit()
+
+
+                                """
+                                if self.batchList:
+                                    for val in self.batchList:
+                                        self.cursor.excecute(
+                                            "INSERT INTO %s VALUES (%s, %s, %s, %s,'%s','%s')" % ('TrackPoint', *val))
+                                    self.db_connection.commit()
+                                """
 
 
 def main():
@@ -206,25 +227,25 @@ def main():
     instance = None
     try:
         instance = DatabaseSession()
-        print('Datasession start')
-        # instance.create_table('User')
-        # instance.create_table('Activity')
-        # instance.create_table('TrackPoint')
+        #print('Datasession start')
+        #instance.create_table('User')
+        #instance.create_table('Activity')
+        #instance.create_table('TrackPoint')
     except Exception as e:
         print("Unable to create database:", e)
-    # print('apply data...')
+    print('apply data...')
     try:
-        # instance.apply_data(instance)
-        # instance.show_tables()
-        # instance.drop_table('TrackPoint')
-        # instance.drop_table('Activity')
-        # instance.drop_table('User')
+        instance.apply_data(instance)
+        #instance.show_tables()
+        #instance.drop_table('TrackPoint')
+        #instance.drop_table('Activity')
+        #instance.drop_table('User')
         
-        # instance.show_tables()
+        instance.show_tables()
 
-        instance.check_sql()
-    # except Exception as e:
-        # print("ERROR: Failed to use database:", e)
+        # instance.check_sql()
+    except Exception as e:
+        print("ERROR: Failed to use database:", e)
     finally:
         if instance:
             instance.connection.close_connection()
