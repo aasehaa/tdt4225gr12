@@ -1,7 +1,7 @@
 from tabulate import tabulate
 
 
-def get_long_activity(self):
+def query_four(self):
     # Get acitivties start and end time
     query = "SELECT id, start_date_time, end_date_time FROM Activity"
     self.cursor.execute(query)
@@ -21,10 +21,11 @@ def get_long_activity(self):
             continue
         else:
             number_of_users.append(user)
-    print(len(number_of_users))
+    print('\n')
+    print('Number of users with activities > 1 day: \n', len(number_of_users))
 
 
-def year_and_month_with_most_activities(self):
+def query_nine(self):
     # get all activities
     query = "SELECT * FROM Activity"
     self.cursor.execute(query)
@@ -52,11 +53,6 @@ def year_and_month_with_most_activities(self):
     print('number of activities: ', res_num)
 
     recorded_activities(res_time, rows)
-
-"""
-Which user had the most activities this year and month, and how many recorded hours do they have? 
-Do they have more hours recorded than the user with the second most activities? 
-"""
 
 
 def recorded_activities(date, rows):
@@ -95,7 +91,7 @@ def recorded_activities(date, rows):
             next_best_user_id = best_user_id
             best_user_id = user
 
-    # how many recorded hours for the users?
+    # how many recorded hours for the users
     hours_best_user = find_recorded_hours(best_user_id, rows)
     hours_next_best_user = find_recorded_hours(next_best_user_id, rows)
 
@@ -113,12 +109,17 @@ def find_recorded_hours(user, rows):
     recorded_hours = 0
     # delete activities not related to user
     # assumption: not handling cases where activities are ending in another month
+    # assumption: 1 month = 730 hours
+    hours_per_month = 730
+    hours_per_day = 24
     for activity in activities:
         if activity[1] != user:
             continue
         else:
-            hours_per_activity = activity[4].hour - activity[3].hour
-            recorded_hours += hours_per_activity
+            hours_per_activity = (activity[4].hour - activity[3].hour)
+            days_per_activity = (activity[4].day - activity[3].day) * hours_per_day
+            month_per_activity = (activity[4].month - activity[3].month)*hours_per_month
+            recorded_hours += hours_per_activity + days_per_activity + month_per_activity
 
     return recorded_hours
 

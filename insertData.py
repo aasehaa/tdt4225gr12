@@ -1,7 +1,4 @@
 import os
-# import pandas as pd
-from datetime import datetime
-import utilities
 from models import TrackPointObj
 import sql
 from DbConnector import DbConnector
@@ -70,9 +67,6 @@ class DatabaseSession:
             query = "INSERT INTO %s VALUES ('%s', %s)"
         elif table_name == 'Activity':
             query = "INSERT INTO %s (user_id, transportation_mode, start_date_time, end_date_time) VALUES ('%s', %s, '%s', '%s')"
-
-        #else:
-            #query = "INSERT INTO %s (activity_id, lat, lon, altitude, date_days, date_time) VALUES (%s, %s, %s, %s, '%s', '%s')"
         try:
             self.cursor.execute(query % (table_name, *values))
             self.db_connection.commit()
@@ -117,7 +111,8 @@ class DatabaseSession:
         print(tabulate(rows, headers=self.cursor.column_names))
 
     def check_sql(self):
-        sql.year_and_month_with_most_activities(self)
+        sql.query_nine(self)
+        sql.query_four(self)
 
     def apply_data(self, instance):
         """Main method scraping and fitting data from dataset, and inserting into the database
@@ -127,9 +122,6 @@ class DatabaseSession:
         """
         dataset_path = os.path.dirname(__file__) + "/../dataset"
 
-        # Test
-        test_dataset_path = os.path.dirname(__file__) + "/../testDataset2"
-
         with open(dataset_path + '/labeled_ids.txt', 'r') as fs:
             # Collect user IDs that has labeled activity
             labeled_IDs = fs.read().splitlines()
@@ -137,7 +129,7 @@ class DatabaseSession:
         for count, (root, dirs, files) in enumerate(os.walk(dataset_path + '/Data')):
             if count == 0:
                 # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
-                # For each of them, we cehck if they're labeled and assign the has_labels boolean accordingly.
+                # For each of them, we check if they're labeled and assign the has_labels boolean accordingly.
                 for id in dirs:
                     has_labels = id in labeled_IDs
                     instance.insert_data('User', (id, has_labels))
@@ -160,8 +152,6 @@ class DatabaseSession:
                                 # Convert to DateTime:
                                 start_time = start_time.replace("/", "-")
                                 end_time = end_time.replace("/", "-")
-                                # datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
-                                # end_time = datetime.strptime(end_time, '%Y/%m/%d %H:%M:%S')
 
                                 # Add to dictionary
                                 self.potential_matches[root[-3:]][0].append(start_time)
@@ -178,13 +168,13 @@ class DatabaseSession:
                                 activity_end = activity[-1].split(',')[5] + ' ' + activity[-1].split(',')[6]
                                 
                                 user = root[-14:-11]
-                                if activity_start in self.potential_matches[root[-14:-11]][0]:
+                                if activity_start in self.potential_matches[user][0]:
                                     # This triggers when we find a match for the start time.
                                     # We also have to ensure that the corresponding end time also matches.
-                                    ind = self.potential_matches[root[-14:-11]][0].index(activity_start)
-                                    if activity_end == self.potential_matches[root[-14:-11]][1][ind]:
-                                        transp_mode = "'" + self.potential_matches[root[-14:-11]][2][ind] + "'"
-                                current_user = root[-14:-11]  # root is on the form Data\xxx\Trajectory so we extract xxx
+                                    ind = self.potential_matches[user][0].index(activity_start)
+                                    if activity_end == self.potential_matches[user][1][ind]:
+                                        transp_mode = "'" + self.potential_matches[user][2][ind] + "'"
+                                current_user = user  # root is on the form Data\xxx\Trajectory so we extract xxx
 
                                 instance.insert_data('Activity',
                                                      (current_user, transp_mode, activity_start, activity_end))
@@ -199,27 +189,28 @@ class DatabaseSession:
                                     track_point = TrackPointObj.TrackPoint(activity_ID, lat, long, alt, timestamp, time_datetime)
 
                                     track_points.append(track_point)
-                                    #instance.insert_data('TrackPoint', values=(activity_ID, lat, long, alt, timestamp, time_datetime))
-                                    #instance.insert_batch('TrackPoint', values=
-                                    #(activity_ID, lat, long, alt, timestamp, time_datetime), batchSize=50)
 
-                                values_string = ",".join(list(map(lambda tp: "(" + ",".join([str(tp.activity_id),
+                                track_points_values_string = ",".join(list(map(lambda tp: "(" + ",".join([str(tp.activity_id),
                                             str(tp.lat), str(tp.long), str(tp.altitude), str(tp.date_days), "'" +
                                                         str(tp.date_time) + "'", ]) + ")", track_points)))
                                 query = """INSERT INTO TrackPoint(activity_id, lat, lon, altitude, date_days, date_time) 
-                                            VALUES %s;""" % values_string
+                                            VALUES %s;""" % track_points_values_string
 
                                 self.cursor.execute(query)
                                 self.db_connection.commit()
 
 
-                                """
-                                if self.batchList:
-                                    for val in self.batchList:
-                                        self.cursor.excecute(
-                                            "INSERT INTO %s VALUES (%s, %s, %s, %s,'%s','%s')" % ('TrackPoint', *val))
-                                    self.db_connection.commit()
-                                """
+def create_tables(self):
+    self.create_table('User')
+    self.create_table('Activity')
+    self.create_table('TrackPoint')
+
+
+def drop_tables(self):
+    self.show_tables()
+    self.drop_table('TrackPoint')
+    self.drop_table('Activity')
+    self.drop_table('User')
 
 
 def main():
@@ -227,23 +218,16 @@ def main():
     instance = None
     try:
         instance = DatabaseSession()
-        #print('Datasession start')
-        #instance.create_table('User')
-        #instance.create_table('Activity')
-        #instance.create_table('TrackPoint')
+        print('Datasession start')
+
     except Exception as e:
         print("Unable to create database:", e)
     print('apply data...')
     try:
-        instance.apply_data(instance)
+        #instance.apply_data(instance)
         #instance.show_tables()
-        #instance.drop_table('TrackPoint')
-        #instance.drop_table('Activity')
-        #instance.drop_table('User')
-        
-        instance.show_tables()
-
-        # instance.check_sql()
+        #instance.drop_tables()
+        instance.check_sql()
     except Exception as e:
         print("ERROR: Failed to use database:", e)
     finally:
