@@ -1,4 +1,3 @@
-# Query 6
 from haversine import haversine, Unit
 from DbConnector import DbConnector
 
@@ -120,9 +119,7 @@ class DBQuerySession:
 
         return rows
 
-
-    # query 10
-    def get_total_distance_walked(self):
+    def query_ten(self):
         query = "SELECT lat, lon, start_date_time, end_date_time FROM TrackPoint JOIN Activity ON TrackPoint.activity_id = Activity.id WHERE Activity.user_id = '112' AND Activity.transportation_mode = 'walk';"
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
@@ -130,7 +127,7 @@ class DBQuerySession:
         for row in rows:
             if row[2].year != 2008 and row[3].year != 2008:
                 rows.remove(row)
-
+        
         total_distance = 0
         for x in range(0, len(rows)-1):
             total_distance += haversine((rows[x][0], rows[x][1]),(rows[x+1][0], rows[x+1][1]))
@@ -162,7 +159,7 @@ class DBQuerySession:
             top_users = sorted(alt_gained, key=alt_gained.get, reverse=True)[:20]
             print("Query 1\nUser\nAltitude gained")
             for usr in top_users:
-                print(usr, alt_gained[usr])
+                print(usr, alt_gained[usr]*0.3048)
         
         return alt_gained
 
@@ -203,58 +200,66 @@ def main():
     try:
         count = instance.query_one()
         print("Query 1")
-        print(count)
+        for value in count:
+            print(value, sep="\t")
     except Exception as e:
         print("Unable to run query 1\n", e, sep="")
-    try:
-        two = instance.query_two()
-        print("Query 2")
-        print(two)
-    except Exception as e:
-        print("Unable to run query 2\n", e, sep="")
-    try:
-        high = instance.query_three()
-        print("Query 3")
-        for value in high:
-            print(value, sep="\t")
-    except Exception as e:
-        print("Unable to run query 3\n", e, sep="")
-    try:
-        multiple = instance.query_five()
-        print("Query 5")
-        for value in multiple:
-            print(value, sep="\t")
-    except Exception as e:
-        print("Unable to run query 5\n", e, sep="")
-    try:
-        close_contacts = instance.query_six()
-        print("Query 6:\nID\tNærkontakter")
-        for key, value in close_contacts.items():
-            print(key, value, sep="\t")
-    except Exception as e:
-        print("Unable to run query 6\n", e, sep="")
-    try:
-        no_taxi = instance.query_seven()
-        print("Query 7")
-        for value in no_taxi:
-            print(value, sep="\t")
-    except Exception as e:
-        print("Unable to run query 7\n", e, sep="")
-    try:
-        t_mode = instance.query_eight()
-        print("Query 8")
-        for value in t_mode:
-            print(value, sep="\t")
-    except Exception as e:
-        print("Unable to run query 8\n", e, sep="")
-    try:
-        full_invalid = instance.query_twelve()
-        print("Query12:\nUserID\t#Invalid activities")
-        for key, value in full_invalid.items():
-            if value != 0:
-                print(key, value, sep='\t')
-    except:
-        print("Unable to run query 12")
+    # try:
+    #     two = instance.query_two()
+    #     print("Query 2")
+    #     for value in two:
+    #         print(value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 2\n", e, sep="")
+    # try:
+    #     high = instance.query_three()
+    #     print("Query 3")
+    #     for value in high:
+    #         print(value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 3\n", e, sep="")
+    # try:
+    #     multiple = instance.query_five()
+    #     print("Query 5")
+    #     for value in multiple:
+    #         print(value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 5\n", e, sep="")
+    # try:
+    #     close_contacts = instance.query_six()
+    #     print("Query 6:\nID\tNærkontakter")
+    #     for key, value in close_contacts.items():
+    #         print(key, value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 6\n", e, sep="")
+    # try:
+    #     no_taxi = instance.query_seven()
+    #     print("Query 7")
+    #     for value in no_taxi:
+    #         print(value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 7\n", e, sep="")
+    # try:
+    #     t_mode = instance.query_eight()
+    #     print("Query 8")
+    #     for value in t_mode:
+    #         print(value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 8\n", e, sep="")
+    # try:
+    #     walked = instance.query_ten()
+    #     print("Query 10")
+    #     print(walked)
+    # except Exception as e:
+    #     print("Unable to run query 10\n", e, sep="")
+    # try:
+    #     full_invalid = instance.query_twelve()
+    #     print("Query12:\nUserID\t#Invalid activities")
+    #     for key, value in full_invalid.items():
+    #         if value != 0:
+    #             print(key, value, sep='\t')
+    # except:
+    #     print("Unable to run query 12")
     finally:
         # Ensure connection is closed properly regardless of exceptions
         if instance:

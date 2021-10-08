@@ -219,6 +219,7 @@ def main(drop_data: bool = False) -> None:
     try:
         # Applying data is the core function of this file as is excecuted here
         instance.apply_data(instance)
+        print(instance.query_ten())
         if drop_data:
             instance.drop_table('TrackPoint')
             instance.drop_table('Activity')
