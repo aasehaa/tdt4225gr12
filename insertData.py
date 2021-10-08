@@ -1,145 +1,239 @@
-""" 
-Insert data psudeocode
-* Bruk os.walk
-* For hver user:
-    if user_dirname in labeled_ids.txt: has_labels = True
-    sett inn bruker i DB
-    for hver .plt
-        activityID = mysql_connector.GetAutoIncrementThing()
-        if antall lines > 2506: skip (husk å anta 2506 i rapporten)
-        hent start [6] og slutt [-1] datetime
-        Sett inn aktivitet i DB (med transportation_mode = '')
-        if has_labels:
-            sjekk at start in labels[start] og slutt in labels[slutt]
-                hvis match: sett transportation_mode til labels[Mode]
-        sett inn plt-data i TrackPoint DB:
-        with open(filnavn) as f:
-            skip til linje 6
-            
-
-        # Piazza-spørsmål: kan vi anta at data ikke er feil?   
-## Batches of data instead?      
-"""
 import os
-# import pandas as pd
-from datetime import datetime
-import utilities
+from models import TrackPointObj
+import sql
 from DbConnector import DbConnector
-# from tabulate import tabulate
+from tabulate import tabulate
+from typing import Tuple
+
+
 try:
     from tqdm import tqdm
 except:
-    pass #noqa
+    pass  # noqa
+
 
 class DatabaseSession:
     def __init__(self) -> None:
+        """Class constructor
+        """
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
+        self.batchList = []  # To insert batches of data
+        self.potential_matches = dict()
 
-    def create_table(self, table_name):
+    def create_table(self, table_name: str) -> None:
+        """Creates tables with appropriate schema given that the table name doesn't aldready exist
+        :param table_name: 
+        :type table_name: str
+        """
         table_schema = {
-            'User': """id STRING NOT NULL PRIMARY KEY,
-                    has_labels BOOLEAN""",
-            'Activity': """id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                        user_id STRING FOREIGN KEY REFERENCES User(id),
-                        transportation_mode STRING,
+            'User': """id VARCHAR(3) NOT NULL,
+                        has_labels BOOLEAN,
+                        PRIMARY KEY (id)""",
+            'Activity': """id INT AUTO_INCREMENT NOT NULL,
+                        user_id VARCHAR(3),
+                        transportation_mode VARCHAR(10),
                         start_date_time DATETIME,
-                        end_date_time DATETIME
+                        end_date_time DATETIME,
+                        PRIMARY KEY (id),
+                        FOREIGN KEY (user_id) REFERENCES User(id)
                         """,
-            'TrackPoint': """id INT NOT NULL PRIMARY KEY,
-                        activity_id INT FOREIGN KEY REFERENCES Activity(id),
+            'TrackPoint': """id INT AUTO_INCREMENT NOT NULL,
+                        activity_id INT,
                         lat DOUBLE,
                         lon DOUBLE,
                         altitude INT,
                         date_days DOUBLE,
-                        date_time DATETIME"""
+                        date_time DATETIME,
+                        PRIMARY KEY (id),
+                        FOREIGN KEY (activity_id) REFERENCES Activity(id)"""
         }
         query = """CREATE TABLE IF NOT EXISTS %s ( %s )"""
         # This adds table_name to the %s variable and executes the query
-        self.cursor.execute(query % table_name % table_schema[table_name])
+        self.cursor.execute(query % (table_name, table_schema[table_name]))
         self.db_connection.commit()
 
-    def insert_data(self, table_name, values):
+    def insert_data(self, table_name: str, values: Tuple) -> None:
+        """Method for inserting a single row/query to a given table
+
+        :param table_name: Name of table in Database
+        :type table_name: str
+        :param values: Tuple of all values to be inserted  
+        :type values: Tuple of varying size and data types
+        """
         # Need to parse the columns in 'values` differently depending on what table we are inserting into
         if table_name == 'User':
-            values = utilities.stringpad(values[0]) + ', ' + values[1]
+            query = "INSERT INTO %s VALUES ('%s', %s)"
         elif table_name == 'Activity':
-            # Second and third column has to be padded with single quotes.
-            values[1], values[2] = utilities.stringpad(values[1]), utilities.stringpad(values[2])
-            values = ','.join(values)
-        else:
-            values = ','.join(values)
-        query = """INSERT INTO %s VALUES (%s)"""
+            query = "INSERT INTO %s (user_id, transportation_mode, start_date_time, end_date_time) VALUES ('%s', %s, '%s', '%s')"
         try:
-            self.cursor.execute(query % (table_name, values))
+            self.cursor.execute(query % (table_name, *values))
             self.db_connection.commit()
         except Exception as e:
-            print("Unable to add values " + values + " to table " + table_name + '\n' + e)
+            print("Unable to add values to table:", e)
+
+    def insert_batch(self, table_name: str, values: Tuple, batchSize: int) -> None:
+        """Specific method for adding batches of insertions simultaneously, only implemented for TrackPoint table
+
+        :param table_name: Name of table (TrackPoint)
+        :type table_name: str
+        :param values: Values to be inserted
+        :type values: Tuple
+        :param batchSize: Number of additions to query at the same time
+        :type batchSize: int
+        """
+        if len(self.batchList) < batchSize:
+            self.batchList.append(values)
+        else:
+            for val in self.batchList:
+                self.cursor.excecute("INSERT INTO %s VALUES (%s, %s, %s, %s,'%s','%s')" % (table_name, *val))
+            self.db_connection.commit()
+        self.batchList = []
 
     def drop_table(self, table_name):
         query = "DROP TABLE %s"
         self.cursor.execute(query % table_name)
+        self.db_connection.commit()
+
     def clean_database(self):
-        pass
+        """Drops all tables in Database
+        """
+        self.cursor.execute("SHOW tables")
+        all_tables = self.cursor.fetchall()[0]
+        for table in all_tables:
+            self.drop_table(self, table)
         # Drop all tables
 
-dataset_path = os.path.dirname(__file__) + "\\..\\dataset"
-with open(dataset_path + '\\labeled_ids.txt', 'r') as fs:
-    # Collect user IDs that has labeled activity
-    labeled_IDs = fs.read().splitlines()
-instance = DatabaseSession()
-instance.create_table('User')
-instance.create_table('Activity')
-instance.create_table('TrackPoints')
+    def show_tables(self):
+        self.cursor.execute("SHOW TABLES")
+        rows = self.cursor.fetchall()
+        print(tabulate(rows, headers=self.cursor.column_names))
 
-for count, root, dirs, files in enumerate(os.walk(dataset_path + '\\Data')):
-    potential_matches = dict() # TODO is this very large and inefficient?
-    if count == 0:
-        # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
-        # For each of them, we cehck if they're labeled and assign the has_labels boolean accordingly.
-        for id in dirs:
-            has_labels = id in labeled_IDs
-            instance.insert_data('User',(id, has_labels))
-            potential_matches[id] = [[], [], []]
+    def check_sql(self):
+        sql.query_nine(self)
+        sql.query_four(self)
+
+    def apply_data(self, instance):
+        """Main method scraping and fitting data from dataset, and inserting into the database
+
+        :param instance: Instance-class containing database connection info
+        :type instance: class
+        """
+        dataset_path = os.path.dirname(__file__) + "/../dataset"
+
+        with open(dataset_path + '/labeled_ids.txt', 'r') as fs:
+            # Collect user IDs that has labeled activity
+            labeled_IDs = fs.read().splitlines()
+
+        for count, (root, dirs, files) in enumerate(os.walk(dataset_path + '/Data')):
+            if count == 0:
+                # This part inserts rows in the User table. When count is 0, dirs will be a list of all user IDs ['001', ...].
+                # For each of them, we check if they're labeled and assign the has_labels boolean accordingly.
+                for id in dirs:
+                    has_labels = id in labeled_IDs
+                    instance.insert_data('User', (id, has_labels))
+                    # Create a 2D list for each ID in a dictionary made for matching activities with their labels
+                    self.potential_matches[id] = [[], [], []]
+
+            if files != []:
+                # This event is triggered if and only if
+                # 1) We are in a User-folder with the one labels file
+                # 2) We are in a Trajectory-folder with all plt-files
+                # We implement case 1 first:
+                for fn in files:
+
+                    if fn[-3:] == 'txt':  # Case 1: Open the labels.txt file
+                        with open(root + '/' + fn, 'r') as f:
+                            all_rows = f.read().splitlines()
+                            for row in all_rows[1:]:
+                                start_time, end_time, mode = row.split('\t')
+
+                                # Convert to DateTime:
+                                start_time = start_time.replace("/", "-")
+                                end_time = end_time.replace("/", "-")
+
+                                # Add to dictionary
+                                self.potential_matches[root[-3:]][0].append(start_time)
+                                self.potential_matches[root[-3:]][1].append(end_time)
+                                self.potential_matches[root[-3:]][2].append(mode)
+
+                    elif fn[-3:] == 'plt':
+                        with open(root + '/' + fn, 'r') as f:
+                            activity = f.read().splitlines()[6:]
+                            if len(activity) <= 2500:
+                                transp_mode = "NULL"
+                                # Save time as YYYY-MM-DD HH:MM:SS strings
+                                activity_start = activity[0].split(',')[5] + ' ' + activity[0].split(',')[6]
+                                activity_end = activity[-1].split(',')[5] + ' ' + activity[-1].split(',')[6]
+                                
+                                user = root[-14:-11]
+                                if activity_start in self.potential_matches[user][0]:
+                                    # This triggers when we find a match for the start time.
+                                    # We also have to ensure that the corresponding end time also matches.
+                                    ind = self.potential_matches[user][0].index(activity_start)
+                                    if activity_end == self.potential_matches[user][1][ind]:
+                                        transp_mode = "'" + self.potential_matches[user][2][ind] + "'"
+                                current_user = user  # root is on the form Data\xxx\Trajectory so we extract xxx
+
+                                instance.insert_data('Activity',
+                                                     (current_user, transp_mode, activity_start, activity_end))
+                                # instance.cursor.execute("SELECT LAST_INSERT_ID()")
+                                # activity_ID = str(instance.cursor.fetchall()[0][0])
+                                activity_ID = instance.cursor.lastrowid
+
+                                track_points = []
+                                for point in activity:
+                                    lat, long, _, alt, timestamp, date, time = point.split(',')
+                                    time_datetime = date + " " + time
+                                    track_point = TrackPointObj.TrackPoint(activity_ID, lat, long, alt, timestamp, time_datetime)
+
+                                    track_points.append(track_point)
+
+                                track_points_values_string = ",".join(list(map(lambda tp: "(" + ",".join([str(tp.activity_id),
+                                            str(tp.lat), str(tp.long), str(tp.altitude), str(tp.date_days), "'" +
+                                                        str(tp.date_time) + "'", ]) + ")", track_points)))
+                                query = """INSERT INTO TrackPoint(activity_id, lat, lon, altitude, date_days, date_time) 
+                                            VALUES %s;""" % track_points_values_string
+
+                                self.cursor.execute(query)
+                                self.db_connection.commit()
 
 
-    if files != []:
-        # This event is triggered if and only if
-        # 1) We are in a User-folder with the one labels file
-        # 2) We are in a Trajectory-folder with all plt-files
-        # We implement case 1 first:
-        for fn in files:
+def create_tables(self):
+    self.create_table('User')
+    self.create_table('Activity')
+    self.create_table('TrackPoint')
 
-            if fn[-3] == 'txt':
-                with open(fn, 'r') as f:
-                    all_rows = f.read().splitlines()
-                    for row in all_rows[1:]:
-                        start_time, end_time, mode = row.split('\t')
-                        # Convert times to DateTime form
-                        # potential_matches[root[5:8]][0].append(start_time) etc etc
 
-            else:
-                with open(fn, 'r') as f: # TODO maybe we need entire directory path, unsure
-                    if sum(1 for line in f) <= 2506: # Skip all files with more than 2506 lines.
-                        transp_mode = "NULL"
-                        activity = f.read().splitlines()[6:]
-                        activity_start, activity_end = activity[0].split(',')[4], activity[-1].split(',')[4]
-                        activity_start, activity_end = utilities.convert_timestamp(activity_start), utilities.convert_timestamp(activity_end)
-                        if activity_start in potential_matches[root[5:8]][0]:
-                            pass
-                            # Get index in potential_matches
-                            # if activity_end == potential_matches[root[5:8]][1][ind]:
-                                # transp_mode = potential_matches[root[5:8]][2][ind]
-                        current_user = root[5:8] # root is on the form Data\xxx\Trajectory so we extract xxx
+def drop_tables(self):
+    self.show_tables()
+    self.drop_table('TrackPoint')
+    self.drop_table('Activity')
+    self.drop_table('User')
 
-                        instance.insert_data('Activity', (current_user, transp_mode, activity_start, activity_end))
-                        instance.cursor.execute("SELECT LAST_INSERT_ID()")
-                        activity_ID = int(instance.cursor.fetchall()[0][0])
-                        for point in activity:
-                            lat, long, _, alt, time, _, _ = point.split(',')
-                            time_datetime = utilities.convert_timestamp(time)
-                            instance.insert_data('Trackpoint', values=
-                            (
-                                activity_ID, lat, long, alt, time, time_datetime
-                            )) #TODO make it so it inserts batches instead here!
+
+def main():
+    print('main start')
+    instance = None
+    try:
+        instance = DatabaseSession()
+        print('Datasession start')
+
+    except Exception as e:
+        print("Unable to create database:", e)
+    print('apply data...')
+    try:
+        #instance.apply_data(instance)
+        #instance.show_tables()
+        #instance.drop_tables()
+        instance.check_sql()
+    except Exception as e:
+        print("ERROR: Failed to use database:", e)
+    finally:
+        if instance:
+            instance.connection.close_connection()
+
+
+if __name__ == '__main__':
+    main()
