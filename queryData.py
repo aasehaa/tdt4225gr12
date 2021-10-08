@@ -1,6 +1,12 @@
 from haversine import haversine, Unit
 from DbConnector import DbConnector
 
+try:
+    from tqdm import tqdm
+except:
+    def tqdm(*args):
+        return args
+
 class DBQuerySession:
     def __init__(self) -> None:
         """Constructor"""
@@ -125,10 +131,8 @@ class DBQuerySession:
         FROM User JOIN Activity ON User.id = Activity.user_id
         GROUP BY User.id
         HAVING numTaxi < 1 or numTaxi IS NULL;"""
-
         self.cursor.execute(query)
         rows = self.cursor.fetchall()
-
         return rows
 
     def query_eight(self):
@@ -256,13 +260,14 @@ class DBQuerySession:
         return total_distance
     
     def query_eleven(self):
+        ONE_METER_FEET = 0.3048 # 1 foot ~0.3 feet
         alt_gained = dict()
         for i in range(1,182):
             alt_gained[str(i).zfill(3)] = 0
 
-        for id in alt_gained.keys():
+        for id in tqdm(alt_gained.keys()):
             query = """
-            SELECT User.id, date_days
+            SELECT User.id, altitude
             FROM TrackPoint
                 JOIN Activity ON activity_id = Activity.id
                 JOIN User on user_id = User.id
@@ -270,30 +275,28 @@ class DBQuerySession:
             self.cursor.execute(query % id)
             TP = self.cursor.fetchall()
 
-            for i in range(1, len(TP) + 1):
+            for i in range(1, len(TP)):
                 alt_difference = TP[i-1]['altitude'] - TP[i]['altitude']
                 if alt_difference > 0:
                     if TP[i-1]['altitude'] != -777 and TP[i]['altitude'] != -777:
                         alt_gained[id] += alt_difference
             
-            # Get the top 20 highest total altitudes
-            top_users = sorted(alt_gained, key=alt_gained.get, reverse=True)[:20]
-            print("Query 1\nUser\nAltitude gained")
-            for usr in top_users:
-                print(usr, alt_gained[usr]*0.3048)
+        # Get the top 20 highest total altitude
+        top_users = sorted(alt_gained, key=alt_gained.get, reverse=True)[:20]
+        print("Query 11\nPlace\tUserID\tAltitude gained")
+        for num, usr in enumerate(top_users):
+            print(num+1, usr, alt_gained[usr]*ONE_METER_FEET, sep='\t')
         
         return alt_gained
 
     def query_twelve(self):
-        FIVE_MINUTES_DAYS = 5*60/86_400
-
         invalid_dict = dict()
         for i in range(1,182):
-            invalid_dict[str(i).zfill(3)] = 0
-
-        for id in invalid_dict.keys():
+            invalid_dict[str(i).zfill(3)] = [None, 0] # (curr_activity,  num)
+        
+        for id in tqdm(invalid_dict.keys()):
             query = """
-            SELECT User.id, date_days
+            SELECT User.id, date_days, activity_id
             FROM TrackPoint
                 JOIN Activity ON activity_id = Activity.id
                 JOIN User on user_id = User.id
@@ -301,11 +304,14 @@ class DBQuerySession:
             self.cursor.execute(query % id)
             TP = self.cursor.fetchall()
 
-            for i in range(1, len(TP) + 1):
-                if abs(TP[i-1]['date_days'] - TP[i]['date_days']) > FIVE_MINUTES_DAYS:
-                    invalid_dict[id] += 1
+            for i in range(1, len(TP)):  
+                if TP[i-1]['activity_id'] == TP[i]['activity_id']: # Don't want to compare TPs from 2 different activities
+                    if abs(TP[i-1]['date_days'] - TP[i]['date_days']) > FIVE_MINUTES_DAYS:
+                        curr_activity = TP[i]['activity_id']
+                        if invalid_dict[id][0] != curr_activity:
+                            invalid_dict[id][0] = curr_activity #Ensures only one increment per activity
+                            invalid_dict[id][1] += 1
         return invalid_dict
-
 
 
 
@@ -318,6 +324,23 @@ def main():
         instance = DBQuerySession()
     except Exception as e:
         print("Unable to establish new session:\n", e, sep="")
+    # try:
+    #     close_contacts = instance.query_six()
+    #     print("Query 6:\nID\tNærkontakter")
+    #     for key, value in close_contacts.items():
+    #         print(key, value, sep="\t")
+    # except Exception as e:
+    #     print("Unable to run query 6\n", e, sep="")
+
+    # try:
+    #     full_invalid = instance.query_twelve()
+    #     print("Query12:\nUserID\t#Invalid activities")
+    #     for key, value in full_invalid.items():
+    #         if value[1] != 0:
+    #             print(key, value[1], sep='\t')
+    # except Exception as e:
+    #     print("Unable to run query 12", e)
+    
     try:
         count = instance.query_one()
         print("Query 1")
